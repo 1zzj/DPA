@@ -91,7 +91,7 @@ def TifCrop(TifPath, SavePath ,CropSize, RepetitionRate):
                           int(i * CropSize * (1 - RepetitionRate)): int(i * CropSize * (1 - RepetitionRate)) + CropSize,
                           int(j * CropSize * (1 - RepetitionRate)): int(j * CropSize * (1 - RepetitionRate)) + CropSize]
             #  写图像
-            writeTiff(cropped, geotrans, proj, SavePath + "/%d.png" % new_name)
+            writeTiff(cropped, geotrans, proj, SavePath + "/%d.tif" % new_name)
             #  文件名 + 1
             new_name = new_name + 1
 
@@ -105,7 +105,7 @@ def TifCrop(TifPath, SavePath ,CropSize, RepetitionRate):
                       int(i * CropSize * (1 - RepetitionRate)): int(i * CropSize * (1 - RepetitionRate)) + CropSize,
                       (width - CropSize): width]  # 剩下的一列，直接取cropsize个，哪怕有重叠
         #  写图像
-        writeTiff(cropped, geotrans, proj, SavePath + "/%d.png" % new_name)
+        writeTiff(cropped, geotrans, proj, SavePath + "/%d.tif" % new_name)
         new_name = new_name + 1
 
     #  裁剩下最后一行
@@ -117,7 +117,7 @@ def TifCrop(TifPath, SavePath ,CropSize, RepetitionRate):
             cropped = img[:,
                       (height - CropSize): height,   # 剩下的一行，直接取cropsize个，哪怕有重叠
                       int(j * CropSize * (1 - RepetitionRate)): int(j * CropSize * (1 - RepetitionRate)) + CropSize]
-        writeTiff(cropped, geotrans, proj, SavePath + "/%d.png" % new_name)
+        writeTiff(cropped, geotrans, proj, SavePath + "/%d.tif" % new_name)
         #  文件名 + 1
         new_name = new_name + 1
 
@@ -129,7 +129,7 @@ def TifCrop(TifPath, SavePath ,CropSize, RepetitionRate):
         cropped = img[:,
                   (height - CropSize): height,
                   (width - CropSize): width]
-    writeTiff(cropped, geotrans, proj, SavePath + "/%d.png" % new_name)
+    writeTiff(cropped, geotrans, proj, SavePath + "/%d.tif" % new_name)
     new_name = new_name + 1
 
 def print_info(path,name):
