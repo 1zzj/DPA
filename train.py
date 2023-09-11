@@ -80,15 +80,20 @@ parser.add_argument('--factor', default=0.5, type=float,
 
 
 def main():
+    """设置超参数"""
     args = parser.parse_args()
+    # 额外添加numclass超参数
     args.numclass = 24+1
+
+    # args.source_dir=
+    # args.target_dir
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
     ngpus_per_node = torch.cuda.device_count()
 
     print(args)
 
-    if args.multiprocessing_distributed:
+    if args.multiprocessing_distributed:  # 默认false
         args.world_size = ngpus_per_node * args.world_size
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
@@ -96,11 +101,14 @@ def main():
 
 
 def main_worker(gpu, ngpus_per_node, args):
-    args.gpu = gpu
-
+    """训练 & 验证 """
+    # GPU 并行
+    # ---------------------------------------------------------------------------------------------------
+    args.gpu = gpu  # 默认0
+    # 默认0
     if args.gpu is not None:
         print("Use GPU: {} for training.".format(args.gpu))
-
+    # 默认false
     if args.distributed:
         if args.multiprocessing_distributed:
             args.rank = args.rank * ngpus_per_node + gpu
@@ -110,7 +118,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Define network
     # n_channels=3 for RGB images
-    model = UNet(n_channels=4, n_classes=args.numclass, bilinear=True)
+    model = UNet(n_channels=4, n_classes=args.numclass, bilinear=True) # 默认n_classes = 25
 
     if args.distributed:
         if args.gpu is not None:
@@ -128,12 +136,13 @@ def main_worker(gpu, ngpus_per_node, args):
         model = model.cuda(args.gpu)
         print("Move to GPU: {}".format(args.gpu))
 
-    # Define Criterion
+    # 训练标准
+    # ---------------------------------------------------------------------------------------------------
     weight = np.array([0, 22.7467, 24.6431,  3.2611, 12.7603, 37.6410, 15.1353, 27.0354, 49.7190,
                        38.1156, 45.3688, 19.8079, 15.6410, 14.6416, 35.8430, 34.6233, 49.8047,
                        45.1986, 17.1660, 50.2263, 50.1459, 22.2144, 46.8094, 48.8383, 48.9092])
     weight = torch.from_numpy(weight.astype(np.float32))
-
+    # 默认ce损失
     criterion = SegmentationLosses(weight=weight, ignore_index=0, gpu=args.gpu).build_loss(mode=args.loss_type)
 
     # Define Optimizer
@@ -144,8 +153,9 @@ def main_worker(gpu, ngpus_per_node, args):
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum,
                                     weight_decay=args.weight_decay, nesterov=args.nesterov)
 
-    # Define Dataloader
+    # Dataset
     target_set = target.TRGData(args)
+
 
     if args.distributed:
         target_sampler = torch.utils.data.distributed.DistributedSampler(target_set)
@@ -183,10 +193,11 @@ def main_worker(gpu, ngpus_per_node, args):
         train_loader = torch.utils.data.DataLoader(
             train_set, batch_size=args.batch_size, shuffle=(train_sampler is None),
             num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        # 验证集在500个数据中以批次为单位进行验证
         val_loader = torch.utils.data.DataLoader(
             val_set, batch_size=args.batch_size, shuffle=False,
             num_workers=args.workers, pin_memory=True)
-
+        # 单次迭代，先训练一代，再验证一代
         trainer.training(epoch, train_loader)
         trainer.validation(epoch, val_loader)
 
@@ -194,6 +205,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
 class Trainer(object):
+    """一次迭代"""
     def __init__(self, args, model, criterion, optimizer, scheduler, target_loader, grad_scaler, best_pred):
         self.args = args
 
@@ -224,7 +236,9 @@ class Trainer(object):
 
         for i, data in enumerate(zip(train_loader, trbar)):
             source_set, target_set = data
+            # 源域图像+标签
             srimg, srlbl = source_set['image'], source_set['label']
+            # 目标域图像
             trimg = target_set['image']
 
             if self.args.gpu is not None:
@@ -234,13 +248,14 @@ class Trainer(object):
                 srlbl = srlbl.cuda(self.args.gpu, non_blocking=True)
 
             with torch.cuda.amp.autocast(enabled=self.args.amp):
-                output = self.model(torch.cat([srimg, trimg], dim=0))
-                srout, trout = output.chunk(2, dim=0)
+                # 实现孪生:cat[源域,目标源,0]输入model,out分块0维
+                output = self.model(torch.cat([srimg, trimg], dim=0)) # output:(2*batch_size,25,H,W)
+                srout, trout = output.chunk(2, dim=0)  # 按0维进行平分块  (conv2D对单张图片通道信息(1维)融合，0维信息不相干)
                 class_loss_sr = self.criterion(srout, srlbl)
-
-                trlbl = pseudolabel(trout.detach(), epoch, self.args)
+                # 生成伪标签
+                trlbl = pseudolabel(trout.detach(), epoch, self.args) # [batch_size,1,H,W] 只有ration比例元素有标签，其余为0
                 class_loss_tr = self.criterion(trout, trlbl)
-
+                # 联合损失函数
                 loss = class_loss_sr + class_loss_tr
 
             self.optimizer.zero_grad()

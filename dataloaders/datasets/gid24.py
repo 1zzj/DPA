@@ -23,24 +23,28 @@ class GIDData(Dataset):
         self._image_dir = os.path.join(self._base_dir, 'image')
         self._label_dir = os.path.join(self._base_dir, 'label')
         _splits_dir = os.path.join(self._base_dir, 'list')
-        self.split = [split]
+        self.split = [split]  # split: train或val
 
         self.args = args
-
+        # 存文件名
         self.im_ids = []
+        # 存图片完整路径
         self.images = []
+        # 存标签完整路径
         self.labels = []
-
+        # 在初始化Dataset类时，完成数据路径的随机抽样
         for splt in self.split:
+            # txt文件存训练集或验证集的图像名称，train.txt 和 val.txt 内容不同
             with open(os.path.join(os.path.join(_splits_dir, splt + '.txt')), "r") as f:
                 lines = f.read().splitlines()
-
+            # 打乱名称顺序&抽取
             if splt == 'train':
                 lines = random.sample(lines, len(os.listdir(os.path.join(args.target_dir, args.target))))
             elif split == 'val':
-                lines = random.sample(lines, 500)
+                lines = random.sample(lines, 500)  # random.sample从lines中随机抽500个样本用于批次验证，限制验证集的规模，减少计算
 
             for ii, line in enumerate(lines):
+                # 图像和标签的名称一致
                 _image = os.path.join(self._image_dir, line + ".tif")
                 _label = os.path.join(self._label_dir, line + ".png")
                 assert os.path.isfile(_image)

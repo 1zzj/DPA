@@ -13,7 +13,7 @@ class TRGData(Dataset):
 
     def __init__(self, args):
         super().__init__()
-        self.imdr = os.path.join(args.target_dir, args.target)
+        self.imdr = os.path.join(args.target_dir, args.target)   # target:["beiging"……]默认False
         self.args = args
 
         self.im_ids = []

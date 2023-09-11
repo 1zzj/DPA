@@ -40,7 +40,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    """Upscaling then double conv"""
+    """Upscaling then double conv + cat"""
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
@@ -69,6 +69,9 @@ class Up(nn.Module):
 
 
 class OutConv(nn.Module):
+    """
+    1×1卷积
+    """
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
