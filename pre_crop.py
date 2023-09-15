@@ -29,9 +29,11 @@ def writeTiff(im_data, im_geotrans, im_proj, path):
         datatype = gdal.GDT_Byte  # uint8
     elif 'uint16' in im_data.dtype.name:
         datatype = gdal.GDT_UInt16 # uint16
+    elif 'int16' in im_data.dtype.name:
+        datatype = gdal.GDT_Int16
     else:
         # datatype = gdal.GDT_Float32
-        raise TypeError("不属于uint8或uint16类型")
+        raise TypeError("不属于uint8或uint16或int16类型")
 
     # 得到输入im_data尺寸信息
     if len(im_data.shape) == 3:  # 三维数组(channel,H,W)
@@ -158,6 +160,40 @@ if __name__ == "__main__":
     img_list = [file for file in os.listdir(r"F:\Five_Billion_pixels\Image_16bit_BGRNir") if  file.endswith(".tiff")]
     label_list = [file for file in os.listdir(r"F:\Five_Billion_pixels\Annotation__index") if  file.endswith(".png")]
     Annotation__color = [file for file in os.listdir(r"F:\Five_Billion_pixels\\Annotation__color") if  file.endswith(".tif")]
+    Dt = [file for file in os.listdir(r"H:\\DataSet\\AnNingValley\\GF2\\IMG") if  file.endswith(".tiff")]
+    # 测试集源图片
+    test_list = ['GF2_PMS1__L1A0001064454-MSS1.tif',
+'GF2_PMS1__L1A0001118839-MSS1.tif',
+'GF2_PMS1__L1A0001344822-MSS1.tif',
+'GF2_PMS1__L1A0001348919-MSS1.tif',
+'GF2_PMS1__L1A0001366278-MSS1.tif',
+'GF2_PMS1__L1A0001366284-MSS1.tif',
+'GF2_PMS1__L1A0001395956-MSS1.tif',
+'GF2_PMS1__L1A0001432972-MSS1.tif',
+'GF2_PMS1__L1A0001670888-MSS1.tif',
+'GF2_PMS1__L1A0001680857-MSS1.tif',
+'GF2_PMS1__L1A0001680858-MSS1.tif',
+'GF2_PMS1__L1A0001757429-MSS1.tif',
+'GF2_PMS1__L1A0001765574-MSS1.tif',
+'GF2_PMS2__L1A0000607677-MSS2.tif',
+'GF2_PMS2__L1A0000607681-MSS2.tif',
+'GF2_PMS2__L1A0000718813-MSS2.tif',
+'GF2_PMS2__L1A0001038935-MSS2.tif',
+'GF2_PMS2__L1A0001038936-MSS2.tif',
+'GF2_PMS2__L1A0001119060-MSS2.tif',
+'GF2_PMS2__L1A0001367840-MSS2.tif',
+'GF2_PMS2__L1A0001378491-MSS2.tif',
+'GF2_PMS2__L1A0001378501-MSS2.tif',
+'GF2_PMS2__L1A0001396036-MSS2.tif',
+'GF2_PMS2__L1A0001396037-MSS2.tif',
+'GF2_PMS2__L1A0001416129-MSS2.tif',
+'GF2_PMS2__L1A0001471436-MSS2.tif',
+'GF2_PMS2__L1A0001517494-MSS2.tif',
+'GF2_PMS2__L1A0001591676-MSS2.tif',
+'GF2_PMS2__L1A0001787564-MSS2.tif',
+'GF2_PMS2__L1A0001821754-MSS2.tif']
+    # 测试图片的索引
+    index_list = [index for index, element in enumerate(img_list) if element[:-1] in test_list]
     #--------------------------------------------------------------------------------------------------------------------------------
     # 合并图片和标签列表，人工检查
     # print([item for pair in zip(img_list, Annotation__color) for item in pair])
@@ -169,22 +205,43 @@ if __name__ == "__main__":
     #         break
     # --------------------------------------------------------------------------------------------------------------------------------
     # 遍历Annotation__color进行分割
-    # for file in Annotation__color:
+    # for index,file in enumerate(Annotation__color):
+    #     print(index)
     #     print_info(r"F:\\Five_Billion_pixels\\Annotation__color\\" , file)
-    #     TifCrop(r"F:\\Five_Billion_pixels\\Annotation__color\\" + file,
+    #     if index in index_list:
+    #         print("{}属于测试集".format(file))
+    #         TifCrop(r"F:\\Five_Billion_pixels\\Annotation__color\\" + file,
+    #                 r"H:\\DataSet\\DPA\\data\\Ds\\test\\Annotation__color", 512, 0)
+    #     else:
+    #         TifCrop(r"F:\\Five_Billion_pixels\\Annotation__color\\" + file,
     #             r"H:\\DataSet\\DPA\\data\\Ds\\Annotation__color", 512, 0)
     #--------------------------------------------------------------------------------------------------------------------------------
     # 遍历Image_16bit_BGRNir进行分割
-    print(img_list)
-    for file in img_list:
-        print_info(r"F:\\Five_Billion_pixels\\Image_16bit_BGRNir\\" , file)
-        TifCrop(r"F:\\Five_Billion_pixels\\Image_16bit_BGRNir\\"+file,
-            r"H:\\DataSet\\DPA\\data\\Ds\\image", 512, 0)
+    # for index , file in enumerate(img_list):
+    #     print(index+'\n')
+    #     print_info(r"F:\\Five_Billion_pixels\\Image_16bit_BGRNir\\" , file)
+    #     if index in index_list:
+    #         print("{}属于测试集".format(file))
+    #         TifCrop(r"F:\\Five_Billion_pixels\\Image_16bit_BGRNir\\"+file,
+    #         r"H:\\DataSet\\DPA\\data\\Ds\\test\\image", 512, 0)
+    #         # continue
+    #     else:
+    #         TifCrop(r"F:\\Five_Billion_pixels\\Image_16bit_BGRNir\\" + file,
+    #                 r"H:\\DataSet\\DPA\\data\\Ds\\image", 512, 0)
     # --------------------------------------------------------------------------------------------------------------------------------
     # 遍历Annotation__index进行分割
-    # print(label_list)
-    # for file in label_list:
+    # for index , file in enumerate(label_list):
     #     print_info(r"F:\\Five_Billion_pixels\\Annotation__index\\",file)
-    #     TifCrop(r"F:\\Five_Billion_pixels\\Annotation__index\\"+file,
+    #     if index in index_list:
+    #         print("{}属于测试集".format(file))
+    #         TifCrop(r"F:\\Five_Billion_pixels\\Annotation__index\\" + file,
+    #                 r"H:\\DataSet\\DPA\\data\\Ds\\test\\label", 512, 0)
+    #     else:
+    #         TifCrop(r"F:\\Five_Billion_pixels\\Annotation__index\\"+file,
     #         r"H:\\DataSet\\DPA\\data\\Ds\\label", 512, 0)
     # --------------------------------------------------------------------------------------------------------------------------------
+    # 对目标域图像进行分割
+    # for index,file in enumerate(Dt):
+    #     print_info(r"H:\\DataSet\\AnNingValley\\GF2\\IMG\\" , file)
+    #     TifCrop(r"H:\\DataSet\\AnNingValley\\GF2\\IMG\\" + file,
+    #         r"H:\\DataSet\\DPA\\data\\Dt", 512, 0)

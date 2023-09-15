@@ -9,7 +9,7 @@ from utils.summaries import TensorboardSummary
 from utils.metrics import Evaluator
 from utils.pseudo_label import pseudolabel
 from dataloaders.datasets import gid24
-from dataloaders.datasets import target
+
 
 import torch
 import torch.optim
@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description="DPA with U-Net Training")
 # data path
 parser.add_argument('--source_dir', default=r'\\data\\Ds', type=str,
                     help='path of source data')
-parser.add_argument('--target_dir', default=r'\\data\\Ds', type=str,
+parser.add_argument('--target_dir', default='False', type=str,
                     help='path of target data')
 # training hyper params
 parser.add_argument('--epochs', type=int, default=120, metavar='N',
@@ -85,8 +85,6 @@ def main():
     # 额外添加numclass超参数
     args.numclass = 24+1
 
-    # args.source_dir=
-    # args.target_dir
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
     ngpus_per_node = torch.cuda.device_count()
@@ -154,20 +152,28 @@ def main_worker(gpu, ngpus_per_node, args):
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum,
                                     weight_decay=args.weight_decay, nesterov=args.nesterov)
 
-    # Dataset
-    target_set = target.TRGData(args)
+
+    # 创建dataloader
+    train_set = gid24.GIDData(args, split='train')
+    val_set = gid24.GIDData(args, split='val')
 
     if args.distributed:
-        target_sampler = torch.utils.data.distributed.DistributedSampler(target_set)
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
     else:
-        target_sampler = None
+        train_sampler = None
 
-    target_loader = torch.utils.data.DataLoader(
-        target_set, batch_size=args.batch_size, shuffle=(target_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=target_sampler)
+    train_loader = torch.utils.data.DataLoader(
+        train_set, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+    # 验证集在500个数据中以批次为单位进行验证
+    val_loader = torch.utils.data.DataLoader(
+        val_set, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True)
 
-    # 总体按照target的数量进行训练
-    scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, len(target_loader))
+    print("batch size为:{}".format(args.epochs),"训练集的大小为：{}".format(len(train_set)),"训练集的steps为:{}".format(len(train_loader)))
+    print("batch size为:{}".format(args.epochs), "验证集的大小为：{}".format(len(val_set)),"验证集的steps为:{}".format(len(val_loader)))
+    # Define lr Scheduler
+    scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, len(train_loader))  # 每个epoch的step数 len(train_loader)
 
     # Automatic Mixed Precision
     grad_scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
@@ -175,28 +181,15 @@ def main_worker(gpu, ngpus_per_node, args):
     cudnn.benchmark = True
     best_pred = 0.0
 
-    trainer = Trainer(args, model, criterion, optimizer, scheduler, target_loader, grad_scaler, best_pred)
+    # 单次训练
+    trainer = Trainer(args, model, criterion, optimizer, scheduler, grad_scaler, best_pred)
 
     print('Starting Epoch:', trainer.args.start_epoch)
     print('Total Epoches:', trainer.args.epochs)
 
+   # 迭代训练
     for epoch in range(trainer.args.start_epoch, trainer.args.epochs):
 
-        train_set = gid24.GIDData(args, split='train')
-        val_set = gid24.GIDData(args, split='val')
-
-        if args.distributed:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
-        else:
-            train_sampler = None
-
-        train_loader = torch.utils.data.DataLoader(
-            train_set, batch_size=args.batch_size, shuffle=(train_sampler is None),
-            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
-        # 验证集在500个数据中以批次为单位进行验证
-        val_loader = torch.utils.data.DataLoader(
-            val_set, batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, pin_memory=True)
         # 单次迭代，先训练一代，再验证一代
         trainer.training(epoch, train_loader)
         trainer.validation(epoch, val_loader)
@@ -206,7 +199,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
 class Trainer(object):
     """一次迭代"""
-    def __init__(self, args, model, criterion, optimizer, scheduler, target_loader, grad_scaler, best_pred):
+    def __init__(self, args, model, criterion, optimizer, scheduler, grad_scaler, best_pred):
         self.args = args
 
         # Define Saver
@@ -221,7 +214,7 @@ class Trainer(object):
         self.optimizer = optimizer
         self.scheduler = scheduler
 
-        self.target_loader = target_loader
+
         self.grad_scaler = grad_scaler
 
         # Define Evaluator
@@ -231,32 +224,27 @@ class Trainer(object):
     def training(self, epoch, train_loader):
         train_loss = 0.0
         self.model.train()
-        trbar = tqdm(self.target_loader)
-        num_img_tr = len(self.target_loader)
+        trbar = tqdm(train_loader)
+        num_img_tr = len(train_loader)
 
         for i, data in enumerate(zip(train_loader, trbar)):
             source_set, target_set = data
             # 源域图像+标签
             srimg, srlbl = source_set['image'], source_set['label']
-            # 目标域图像
-            trimg = target_set['image']
 
             if self.args.gpu is not None:
-                trimg = trimg.cuda(self.args.gpu, non_blocking=True)
+
                 srimg = srimg.cuda(self.args.gpu, non_blocking=True)
             if torch.cuda.is_available():
                 srlbl = srlbl.cuda(self.args.gpu, non_blocking=True)
 
             with torch.cuda.amp.autocast(enabled=self.args.amp):
                 # 实现孪生:cat[源域,目标源,0]输入model,out分块0维
-                output = self.model(torch.cat([srimg, trimg], dim=0)) # output:(2*batch_size,25,H,W)
-                srout, trout = output.chunk(2, dim=0)  # 按0维进行平分块  (conv2D对单张图片通道信息(1维)融合，0维信息不相干)
+                srout = self.model(srimg) # output:(2*batch_size,25,H,W)
+
                 class_loss_sr = self.criterion(srout, srlbl)
-                # 生成伪标签
-                trlbl = pseudolabel(trout.detach(), epoch, self.args) # [batch_size,1,H,W] 只有ration比例元素有标签，其余为0
-                class_loss_tr = self.criterion(trout, trlbl)
                 # 联合损失函数
-                loss = class_loss_sr + class_loss_tr
+                loss = class_loss_sr
 
             self.optimizer.zero_grad()
             self.grad_scaler.scale(loss).backward()
@@ -270,7 +258,7 @@ class Trainer(object):
             self.writer.add_scalar('train/total_loss_iter', loss.item(), i + num_img_tr * epoch)
 
         self.writer.add_scalar('train/total_loss_epoch', train_loss, epoch)
-        print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size + trimg.data.shape[0]))
+        print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size ))
         print('Loss: %.3f' % train_loss)
 
     def validation(self, epoch, val_loader):

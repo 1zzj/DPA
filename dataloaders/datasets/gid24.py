@@ -39,12 +39,15 @@ class GIDData(Dataset):
                 lines = f.read().splitlines()
             # 打乱名称顺序&抽取
             if splt == 'train':
-                lines = random.sample(lines, len(os.listdir(os.path.join(args.target_dir, args.target))))
+                if args.target_dir == 'False': # 预训练时使用全部图片
+                    lines = random.sample(lines)
+                else:
+                    lines = random.sample(lines, len(os.listdir(os.path.join(args.target_dir, args.target)))) # 按照目标域的数量进行采样
             elif split == 'val':
                 lines = random.sample(lines, 500)  # random.sample从lines中随机抽500个样本用于批次验证，限制验证集的规模，减少计算
 
             for ii, line in enumerate(lines):
-                # 图像和标签的名称一致
+                # 读取图像（图像和标签的名称一致）
                 _image = os.path.join(self._image_dir, line + ".tif")
                 _label = os.path.join(self._label_dir, line + ".png")
                 assert os.path.isfile(_image)
